@@ -1,0 +1,18 @@
+{
+  "name": "STRATOS",
+  "short_name": "STRATOS",
+  "description": "Train like an officer.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#4B5320",
+  "background_color": "#0A0E0A",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
