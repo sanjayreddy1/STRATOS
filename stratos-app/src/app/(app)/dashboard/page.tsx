@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadStore, saveStore } from "@/lib/local/store";
 import { ARMY_QUOTES, ARMY_IMAGES } from "@/lib/data/motivation";
 import { getDailyLesson } from "@/lib/data/daily-lessons";
+import { CheckCircle2, CalendarDays, Mic, BookOpen, Target, Clock, TrendingUp, ExternalLink, Sparkles } from "lucide-react";
 
 function daysUntil(dateStr?: string | null) {
   if (!dateStr) return null;
@@ -91,74 +92,88 @@ export default function DashboardPage() {
     if (!today || !weekAgo) return { todaysTasks: [], doneToday: 0, completion: 0, hoursWeek: 0 };
     const tasks = s.tasks || [];
     const todaysTasks = tasks.filter((t: any) => t.due_date === today || !t.due_date);
-    const doneToday = todaysTasks.filter((t: any) => t.completed).length;
+    const doneToday = todaysTasks.filter((t: any) => t.completed || t.status === "done").length;
     const completion = todaysTasks.length ? Math.round((doneToday/todaysTasks.length)*100) : 0;
     const hoursWeek = (s.daily_logs||[]).filter((l: any) => l.log_date >= weekAgo).reduce((sum: number,l: any)=>sum+Number(l.hours_studied||0),0);
     return { todaysTasks, doneToday, completion, hoursWeek };
   }, [store, today, weekAgo]);
 
-  if (!lesson) return <div className="text-muted">Loading...</div>;
+  if (!lesson) return <div className="text-muted">Loading mission dashboard...</div>;
   const profile = store?.profile || null;
   const countdown = profile?.target_date && nowTick ? Math.ceil((new Date(profile.target_date).getTime() - nowTick) / 86400000) : null;
-  const streak = 0;
   const topics = (store?.topics||[]).slice(0,20);
-  const news = (store?.news_cache||[]).slice(0,6);
+  const news = (store?.news_cache||[]).slice(0,5);
   const reminders = (store?.reminders||[]).slice(0,5);
   const quote = ARMY_QUOTES[quoteIndex % ARMY_QUOTES.length];
   const image = ARMY_IMAGES[imageIndex % ARMY_IMAGES.length];
-  const taskOfDay = computed.todaysTasks.find((t: any) => !t.completed) || computed.todaysTasks[0] || { title: lesson.practice, suggested: true };
+  const taskOfDay = computed.todaysTasks.find((t: any) => !(t.completed || t.status === "done")) || computed.todaysTasks[0] || { title: lesson.practice, suggested: true };
+  const completedLessonsCount = Object.values(store?.lesson_progress || {}).filter(Boolean).length;
 
   return (
-    <div className="space-y-4">
-      <section className="relative min-h-[calc(100svh-8rem)] rounded-2xl overflow-hidden border border-border">
+    <div className="space-y-5">
+      <section className="relative min-h-[72svh] lg:min-h-[78svh] rounded-3xl overflow-hidden border border-border/80 shadow-xl shadow-black/20">
         <img
           src={image.src}
           alt={image.alt}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover scale-[1.01]"
           loading="eager"
           onError={() => setImageIndex(i => (i + 1) % ARMY_IMAGES.length)}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/45 to-background/95" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-transparent to-black/30" />
-        <div className="relative z-10 min-h-[calc(100svh-8rem)] flex flex-col justify-between p-4 sm:p-6 md:p-8">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/40 to-background/95" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-transparent to-black/25" />
+        <div className="relative z-10 min-h-[72svh] lg:min-h-[78svh] flex flex-col justify-between p-4 sm:p-6 md:p-8">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div className="max-w-2xl">
-              <p className="text-xs uppercase tracking-widest text-accent">Indian Army • SSB Preparation</p>
-              <h1 className="font-heading text-3xl sm:text-4xl md:text-5xl font-semibold mt-2 text-white">Jai Hind{profile?.name ? `, ${profile.name}` : ""}</h1>
-              <p className="text-white/80 text-sm sm:text-base mt-3 max-w-xl">Service Before Self. {profile?.onboarding_completed ? "Your profile is saved locally in this browser." : "Save your profile in Settings/Onboarding — data stays in this browser."}</p>
-            </div>
-            <div className="w-full md:w-[320px] rounded-xl border border-white/20 bg-black/35 backdrop-blur-sm p-4 text-white">
-              <div className="text-accent font-medium text-sm">Task of the Day</div>
-              <div className="mt-2 text-sm sm:text-base">{taskOfDay.title}</div>
-              {taskOfDay.suggested && <div className="text-xs text-white/70 mt-2">Suggested from today's lesson</div>}
-              <div className="mt-4 text-accent font-medium text-sm">Lesson of the Day</div>
-              <div className="mt-1 text-sm">{lesson.topic}</div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/25 backdrop-blur px-3 py-1 text-xs text-accent uppercase tracking-wider">
+                <Sparkles size={12}/> Indian Army SSB Preparation
+              </div>
+              <h1 className="font-heading text-3xl sm:text-4xl md:text-5xl font-semibold mt-3 text-white leading-tight">Jai Hind{profile?.name ? `, ${profile.name}` : ""}</h1>
+              <p className="text-white/85 text-sm sm:text-base mt-3 max-w-xl leading-7">Service Before Self. {profile?.onboarding_completed ? "Your preparation profile is saved locally and ready." : "Complete your profile in Settings/Onboarding to personalize your mission plan."}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Link href="/calendar" className="text-xs px-3 py-1.5 rounded-lg border border-white/30 bg-white/10 hover:bg-white/20">Calendar</Link>
-                <Link href="/interviewer" className="text-xs px-3 py-1.5 rounded-lg border border-accent/50 bg-accent/20 hover:bg-accent/30">AI Interviewer</Link>
+                <Link href="/calendar" className="inline-flex items-center gap-2 text-sm px-3.5 py-2 rounded-xl border border-white/25 bg-white/10 hover:bg-white/20 text-white backdrop-blur"><CalendarDays size={15}/> Calendar</Link>
+                <Link href="/interviewer" className="inline-flex items-center gap-2 text-sm px-3.5 py-2 rounded-xl border border-accent/40 bg-accent/20 hover:bg-accent/30 text-white backdrop-blur"><Mic size={15}/> AI Interviewer</Link>
+                <Link href="/analytics" className="inline-flex items-center gap-2 text-sm px-3.5 py-2 rounded-xl border border-white/25 bg-black/20 hover:bg-black/30 text-white backdrop-blur"><TrendingUp size={15}/> Analytics</Link>
+              </div>
+            </div>
+
+            <div className="w-full lg:w-[360px] rounded-2xl border border-white/20 bg-black/35 backdrop-blur-md p-4 sm:p-5 text-white space-y-4">
+              <div>
+                <div className="text-accent font-medium text-sm flex items-center gap-2"><Target size={15}/> Task of the Day</div>
+                <div className="mt-1.5 text-sm sm:text-base leading-6">{taskOfDay.title}</div>
+                {taskOfDay.suggested && <div className="text-xs text-white/70 mt-1">Suggested from today's SSB lesson</div>}
+              </div>
+              <div className="border-t border-white/15 pt-3">
+                <div className="text-accent font-medium text-sm flex items-center gap-2"><BookOpen size={15}/> Lesson of the Day</div>
+                <div className="mt-1.5 text-sm leading-6">{lesson.topic}</div>
+                <div className="text-xs text-white/70 mt-1">{lesson.focus}</div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl border border-white/15 bg-white/5 p-2"><div className="text-[10px] text-white/70">Countdown</div><div className="font-mono text-lg text-accent">{countdown ?? "—"}</div></div>
+                <div className="rounded-xl border border-white/15 bg-white/5 p-2"><div className="text-[10px] text-white/70">Lessons</div><div className="font-mono text-lg text-accent">{completedLessonsCount}</div></div>
+                <div className="rounded-xl border border-white/15 bg-white/5 p-2"><div className="text-[10px] text-white/70">Today</div><div className="font-mono text-lg text-accent">{computed.completion}%</div></div>
               </div>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-[1.2fr_1fr] gap-4 items-end">
-            <div className="rounded-xl border border-white/20 bg-black/35 backdrop-blur-sm p-4 sm:p-5">
+          <div className="grid md:grid-cols-[1.3fr_1fr] gap-4 items-end mt-4">
+            <div className="rounded-2xl border border-white/20 bg-black/35 backdrop-blur-md p-4 sm:p-5">
               <div className="text-accent text-xs uppercase tracking-wide mb-2">Indian Army Quote</div>
               <blockquote className="text-white">
                 <p className="text-lg sm:text-xl md:text-2xl italic leading-relaxed">"{quote.quote}"</p>
                 <footer className="text-sm text-white/80 mt-3">— {quote.by}</footer>
               </blockquote>
               <div className="mt-4 flex flex-wrap gap-1.5">
-                {ARMY_QUOTES.map((q, i) => (
-                  <button key={i} onClick={() => setQuoteIndex(i)} className={`h-2 w-2 rounded-full ${i===quoteIndex?"bg-accent":"bg-white/40 hover:bg-white/70"}`} aria-label={`Show quote ${i+1}`} />
+                {ARMY_QUOTES.map((_, i) => (
+                  <button key={i} onClick={() => setQuoteIndex(i)} className={`h-2 w-2 rounded-full transition-all ${i===quoteIndex?"bg-accent w-5":"bg-white/40 hover:bg-white/70"}`} aria-label={`Show quote ${i+1}`} />
                 ))}
               </div>
             </div>
-            <div className="rounded-xl border border-white/20 bg-black/35 backdrop-blur-sm p-4 text-white">
+            <div className="rounded-2xl border border-white/20 bg-black/35 backdrop-blur-md p-4 text-white">
               <div className="text-sm font-medium">{image.alt}</div>
               <div className="text-xs text-white/70 mt-1">{image.credit}</div>
-              <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
+              <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
                 {ARMY_IMAGES.map((img, i) => (
-                  <button key={img.src} onClick={() => setImageIndex(i)} className={`h-2.5 w-2.5 rounded-full shrink-0 ${i===imageIndex?"bg-accent":"bg-white/40 hover:bg-white/70"}`} aria-label={`Show image ${i+1}`} />
+                  <button key={img.src} onClick={() => setImageIndex(i)} className={`h-2.5 rounded-full shrink-0 transition-all ${i===imageIndex?"bg-accent w-6":"bg-white/40 w-2.5 hover:bg-white/70"}`} aria-label={`Show image ${i+1}`} />
                 ))}
               </div>
             </div>
@@ -166,115 +181,120 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid lg:grid-cols-[1.4fr_1fr] gap-4">
+      <div className="grid xl:grid-cols-[1.45fr_1fr] gap-4">
         <Card className="overflow-hidden">
           <CardHeader>
             <div>
               <CardTitle>Daily SSB Learning Material</CardTitle>
               <div className="text-xs text-muted mt-1">{lesson.dateKey} • Conducted daily • {lesson.ssbLink}</div>
             </div>
-            <button onClick={toggleLessonDone} className={`h-9 px-3 rounded-lg text-sm font-medium border ${lessonDone ? "bg-primary text-[#0B0D0C] border-primary" : "border-border text-text hover:bg-surface-raised"}`}>
-              {lessonDone ? "Completed today" : "Mark as studied"}
+            <button onClick={toggleLessonDone} className={`h-10 px-3.5 rounded-xl text-sm font-medium border inline-flex items-center gap-2 transition-colors ${lessonDone ? "bg-primary/20 text-success border-success/40" : "border-border text-text hover:bg-surface-raised"}`}>
+              <CheckCircle2 size={16}/> {lessonDone ? "Completed today" : "Mark as studied"}
             </button>
           </CardHeader>
           <CardContent className="text-text space-y-4">
-            <div>
+            <div className="rounded-xl border border-border bg-background/30 p-4">
               <div className="text-xs uppercase tracking-wide text-accent mb-1">Topic</div>
-              <h3 className="font-heading text-lg font-semibold">{lesson.topic}</h3>
+              <h3 className="font-heading text-lg sm:text-xl font-semibold">{lesson.topic}</h3>
               <p className="text-sm text-muted mt-1">{lesson.focus}</p>
             </div>
+
             <div>
-              <div className="text-sm font-medium text-accent mb-1">Learning objectives</div>
-              <ul className="list-disc pl-5 text-sm space-y-1">{lesson.objectives.map((o: string, i: number) => <li key={i}>{o}</li>)}</ul>
+              <div className="text-sm font-medium text-accent mb-2">Learning objectives</div>
+              <ul className="list-disc pl-5 text-sm space-y-1.5 text-text/90">{lesson.objectives.map((o: string, i: number) => <li key={i}>{o}</li>)}</ul>
             </div>
+
             <div>
-              <div className="text-sm font-medium text-accent mb-1">Learning material</div>
-              <div className="space-y-2 text-sm text-muted leading-6">
+              <div className="text-sm font-medium text-accent mb-2">Learning material</div>
+              <div className="space-y-2.5 text-sm leading-7">
                 {lesson.learn.map((p: string, i: number) => <p key={i} className="text-text/90">{p}</p>)}
               </div>
             </div>
+
             <div className="grid sm:grid-cols-2 gap-3">
-              <div className="border border-border rounded-lg p-3">
-                <div className="text-sm font-medium text-accent mb-1">Key points</div>
+              <div className="border border-border rounded-xl p-3.5 bg-background/20">
+                <div className="text-sm font-medium text-accent mb-1.5">Key points</div>
                 <ul className="list-disc pl-5 text-sm space-y-1 text-text/90">{lesson.keyPoints.map((k: string, i: number) => <li key={i}>{k}</li>)}</ul>
               </div>
-              <div className="border border-border rounded-lg p-3">
-                <div className="text-sm font-medium text-accent mb-1">Example</div>
-                <p className="text-sm text-text/90">{lesson.example}</p>
+              <div className="border border-border rounded-xl p-3.5 bg-background/20">
+                <div className="text-sm font-medium text-accent mb-1.5">Example</div>
+                <p className="text-sm text-text/90 leading-6">{lesson.example}</p>
               </div>
             </div>
+
             {lesson.doDont && (
               <div className="grid sm:grid-cols-2 gap-3">
-                <div className="border border-border rounded-lg p-3">
-                  <div className="text-sm font-medium text-success mb-1">Do</div>
-                  <ul className="list-disc pl-5 text-sm space-y-1">{lesson.doDont.do.map((d: string, i: number) => <li key={i}>{d}</li>)}</ul>
+                <div className="border border-success/30 rounded-xl p-3.5 bg-success/5">
+                  <div className="text-sm font-medium text-success mb-1.5">Do</div>
+                  <ul className="list-disc pl-5 text-sm space-y-1 text-text/90">{lesson.doDont.do.map((d: string, i: number) => <li key={i}>{d}</li>)}</ul>
                 </div>
-                <div className="border border-border rounded-lg p-3">
-                  <div className="text-sm font-medium text-danger mb-1">Don't</div>
-                  <ul className="list-disc pl-5 text-sm space-y-1">{lesson.doDont.dont.map((d: string, i: number) => <li key={i}>{d}</li>)}</ul>
+                <div className="border border-danger/30 rounded-xl p-3.5 bg-danger/5">
+                  <div className="text-sm font-medium text-danger mb-1.5">Avoid</div>
+                  <ul className="list-disc pl-5 text-sm space-y-1 text-text/90">{lesson.doDont.dont.map((d: string, i: number) => <li key={i}>{d}</li>)}</ul>
                 </div>
               </div>
             )}
-            <div className="border border-accent/30 bg-primary/10 rounded-lg p-3 space-y-2">
-              <div><span className="text-sm font-medium text-accent">Today's practice:</span> <span className="text-sm">{lesson.practice}</span></div>
-              <div><span className="text-sm font-medium text-accent">Reflection:</span> <span className="text-sm">{lesson.reflection}</span></div>
+
+            <div className="border border-accent/30 bg-primary/10 rounded-xl p-4 space-y-2.5">
+              <div><span className="text-sm font-medium text-accent">Today's practice:</span> <span className="text-sm text-text/95">{lesson.practice}</span></div>
+              <div><span className="text-sm font-medium text-accent">Reflection:</span> <span className="text-sm text-text/95">{lesson.reflection}</span></div>
             </div>
 
-            <div className="border border-border rounded-lg p-3 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="border border-border rounded-xl p-4 space-y-3 bg-background/20">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium text-accent">Detailed web-based learning (Tavily)</div>
-                  <div className="text-xs text-muted">Fetch comprehensive, in-depth material from web sources for today's topic.</div>
+                  <div className="text-xs text-muted mt-0.5">Fetch comprehensive, in-depth material and practice guidance for today's topic from web sources.</div>
                 </div>
-                <button onClick={() => fetchDetailedLesson(!!lessonDetail)} disabled={detailLoading} className="h-9 px-3 rounded-lg bg-primary text-[#0B0D0C] text-sm font-medium disabled:opacity-50">
-                  {detailLoading ? "Fetching..." : lessonDetail ? "Refresh detailed learning" : "Fetch detailed learning"}
+                <button onClick={() => fetchDetailedLesson(!!lessonDetail)} disabled={detailLoading} className="h-10 px-4 rounded-xl bg-primary text-[#0B0D0C] text-sm font-medium hover:bg-primary-hover disabled:opacity-50 inline-flex items-center gap-2">
+                  <Sparkles size={15}/> {detailLoading ? "Fetching..." : lessonDetail ? "Refresh detailed learning" : "Fetch detailed learning"}
                 </button>
               </div>
-              {detailError && <p className="text-xs text-danger">{detailError}</p>}
+              {detailError && <p className="text-sm text-danger rounded-lg border border-danger/30 bg-danger/10 p-2.5">{detailError}</p>}
               {lessonDetail && (
-                <div className="space-y-3 text-sm">
-                  {lessonDetail.overview && <p className="text-text/90 leading-6">{lessonDetail.overview}</p>}
+                <div className="space-y-4 text-sm pt-1">
+                  {lessonDetail.overview && <p className="text-text/90 leading-7">{lessonDetail.overview}</p>}
                   {Array.isArray(lessonDetail.detailed_material) && (
                     <div>
-                      <div className="font-medium text-accent mb-1">Detailed material</div>
-                      <div className="space-y-2">{lessonDetail.detailed_material.map((p: string, i: number) => <p key={i} className="text-text/90 leading-6">{p}</p>)}</div>
+                      <div className="font-medium text-accent mb-1.5">Detailed material</div>
+                      <div className="space-y-2.5">{lessonDetail.detailed_material.map((p: string, i: number) => <p key={i} className="text-text/90 leading-7">{p}</p>)}</div>
                     </div>
                   )}
                   {Array.isArray(lessonDetail.key_concepts) && (
                     <div>
-                      <div className="font-medium text-accent mb-1">Key concepts</div>
-                      <ul className="list-disc pl-5 space-y-1">{lessonDetail.key_concepts.map((k: string, i: number) => <li key={i}>{k}</li>)}</ul>
+                      <div className="font-medium text-accent mb-1.5">Key concepts</div>
+                      <ul className="list-disc pl-5 space-y-1 text-text/90">{lessonDetail.key_concepts.map((k: string, i: number) => <li key={i}>{k}</li>)}</ul>
                     </div>
                   )}
                   {Array.isArray(lessonDetail.ssb_application) && (
                     <div>
-                      <div className="font-medium text-accent mb-1">SSB application</div>
-                      <ul className="list-disc pl-5 space-y-1">{lessonDetail.ssb_application.map((k: string, i: number) => <li key={i}>{k}</li>)}</ul>
+                      <div className="font-medium text-accent mb-1.5">SSB application</div>
+                      <ul className="list-disc pl-5 space-y-1 text-text/90">{lessonDetail.ssb_application.map((k: string, i: number) => <li key={i}>{k}</li>)}</ul>
                     </div>
                   )}
                   {Array.isArray(lessonDetail.examples) && (
                     <div>
-                      <div className="font-medium text-accent mb-1">Examples</div>
-                      <ul className="list-disc pl-5 space-y-1">{lessonDetail.examples.map((k: string, i: number) => <li key={i}>{k}</li>)}</ul>
+                      <div className="font-medium text-accent mb-1.5">Examples</div>
+                      <ul className="list-disc pl-5 space-y-1 text-text/90">{lessonDetail.examples.map((k: string, i: number) => <li key={i}>{k}</li>)}</ul>
                     </div>
                   )}
                   {Array.isArray(lessonDetail.practice_questions) && (
                     <div>
-                      <div className="font-medium text-accent mb-1">Practice questions</div>
-                      <ol className="list-decimal pl-5 space-y-1">{lessonDetail.practice_questions.map((k: string, i: number) => <li key={i}>{k}</li>)}</ol>
+                      <div className="font-medium text-accent mb-1.5">Practice questions</div>
+                      <ol className="list-decimal pl-5 space-y-1 text-text/90">{lessonDetail.practice_questions.map((k: string, i: number) => <li key={i}>{k}</li>)}</ol>
                     </div>
                   )}
                   {Array.isArray(lessonDetail.daily_plan) && (
                     <div>
-                      <div className="font-medium text-accent mb-1">Today's detailed plan</div>
-                      <ol className="list-decimal pl-5 space-y-1">{lessonDetail.daily_plan.map((k: string, i: number) => <li key={i}>{k}</li>)}</ol>
+                      <div className="font-medium text-accent mb-1.5">Today's detailed plan</div>
+                      <ol className="list-decimal pl-5 space-y-1 text-text/90">{lessonDetail.daily_plan.map((k: string, i: number) => <li key={i}>{k}</li>)}</ol>
                     </div>
                   )}
                   {Array.isArray(lessonDetail.sources) && lessonDetail.sources.length > 0 && (
                     <div>
-                      <div className="font-medium text-accent mb-1">Web sources (Tavily)</div>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {lessonDetail.sources.map((s: any, i: number) => <li key={i}><a href={s.url} target="_blank" rel="noreferrer" className="text-accent underline">{s.title || s.url}</a></li>)}
+                      <div className="font-medium text-accent mb-1.5">Web sources</div>
+                      <ul className="space-y-1.5">
+                        {lessonDetail.sources.map((s: any, i: number) => <li key={i}><a href={s.url} target="_blank" rel="noreferrer" className="text-accent hover:underline inline-flex items-start gap-1.5"><ExternalLink size={13} className="mt-1 shrink-0"/><span>{s.title || s.url}</span></a></li>)}
                       </ul>
                     </div>
                   )}
@@ -283,61 +303,63 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>Analytics & Progress</CardTitle><Link href="/analytics" className="text-xs text-accent">Open analytics</Link></CardHeader>
-          <CardContent className="space-y-3 text-text">
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="border border-border rounded-lg p-2"><div className="text-xs text-muted">Countdown</div><div className="font-mono text-lg text-accent">{countdown ?? "—"}</div></div>
-              <div className="border border-border rounded-lg p-2"><div className="text-xs text-muted">Today completion</div><div className="font-mono text-lg text-accent">{computed.completion}%</div></div>
-              <div className="border border-border rounded-lg p-2"><div className="text-xs text-muted">Tasks today</div><div className="font-mono text-lg">{computed.doneToday}/{computed.todaysTasks.length}</div></div>
-              <div className="border border-border rounded-lg p-2"><div className="text-xs text-muted">Hours this week</div><div className="font-mono text-lg">{computed.hoursWeek.toFixed(1)}h</div></div>
-            </div>
-            <div className="border border-border rounded-lg p-3">
-              <div className="text-xs text-muted mb-1">Lesson status</div>
-              <div className={`text-sm font-medium ${lessonDone ? "text-success" : "text-accent"}`}>{lessonDone ? "Today's lesson marked as studied" : "Today's lesson pending — study and mark complete"}</div>
-            </div>
-            <div className="text-sm"><div className="text-accent font-medium mb-1">Task of the Day</div><div className="border border-border rounded-lg p-2">{taskOfDay.title}</div></div>
-            <div className="text-xs text-muted">Lesson rotates daily from a structured SSB curriculum (psychology, GTO, interview, OIR, fitness, current affairs).</div>
-          </CardContent>
-        </Card>
+
+        <div className="space-y-4">
+          <Card>
+            <CardHeader><div><CardTitle>Progress snapshot</CardTitle><div className="text-xs text-muted mt-1">At-a-glance readiness indicators</div></div><Link href="/analytics" className="text-xs text-accent hover:underline">Open analytics</Link></CardHeader>
+            <CardContent className="space-y-3 text-text">
+              <div className="grid grid-cols-2 gap-2.5 text-sm">
+                <div className="border border-border rounded-xl p-3 bg-background/20"><div className="text-xs text-muted flex items-center gap-1.5"><Target size={13}/> Countdown</div><div className="font-mono text-xl text-accent mt-1">{countdown ?? "—"}</div><div className="text-[11px] text-muted">days to target</div></div>
+                <div className="border border-border rounded-xl p-3 bg-background/20"><div className="text-xs text-muted flex items-center gap-1.5"><CheckCircle2 size={13}/> Today</div><div className="font-mono text-xl text-accent mt-1">{computed.completion}%</div><div className="text-[11px] text-muted">{computed.doneToday}/{computed.todaysTasks.length} tasks</div></div>
+                <div className="border border-border rounded-xl p-3 bg-background/20"><div className="text-xs text-muted flex items-center gap-1.5"><BookOpen size={13}/> Lessons</div><div className="font-mono text-xl text-accent mt-1">{completedLessonsCount}</div><div className="text-[11px] text-muted">studied total</div></div>
+                <div className="border border-border rounded-xl p-3 bg-background/20"><div className="text-xs text-muted flex items-center gap-1.5"><Clock size={13}/> This week</div><div className="font-mono text-xl text-accent mt-1">{computed.hoursWeek.toFixed(1)}h</div><div className="text-[11px] text-muted">study hours</div></div>
+              </div>
+              <div className="border border-border rounded-xl p-3 bg-background/20">
+                <div className="text-xs text-muted mb-1">Today's lesson status</div>
+                <div className={`text-sm font-medium ${lessonDone ? "text-success" : "text-accent"}`}>{lessonDone ? "Studied and marked complete" : "Pending — study and mark as complete"}</div>
+              </div>
+              <div className="text-sm"><div className="text-accent font-medium mb-1">Focus now</div><div className="border border-border rounded-xl p-3 bg-background/20 leading-6">{taskOfDay.title}</div></div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Today's tasks</CardTitle><Link href="/tracker" className="text-xs text-accent hover:underline">Open tracker</Link></CardHeader>
+            <CardContent>
+              {computed?.todaysTasks.length ? <ul className="space-y-2 text-text">{computed.todaysTasks.slice(0,6).map((t:any)=>(<li key={t.id} className="flex items-center justify-between gap-3 border border-border rounded-xl px-3 py-2.5 bg-background/20"><span className={`text-sm ${(t.completed||t.status==="done")?"line-through text-muted":""}`}>{t.title}</span><span className={`text-xs px-2 py-0.5 rounded-full ${(t.completed||t.status==="done")?"text-success bg-success/10":"text-muted bg-surface-raised"}`}>{(t.completed||t.status==="done")?"Done":"Pending"}</span></li>))}</ul> : <p className="text-sm text-muted">No tasks due today. <Link href="/tracker" className="text-accent underline">Add tasks</Link> to build momentum.</p>}
+            </CardContent>
+          </Card>
+        </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardHeader><CardTitle>Countdown</CardTitle></CardHeader><CardContent className="text-text"><div className="font-mono text-2xl text-accent">{countdown ?? "—"}</div><div className="text-xs">days to target</div></CardContent></Card>
-        <Card><CardHeader><CardTitle>Streak</CardTitle></CardHeader><CardContent className="text-text"><div className="font-mono text-2xl text-accent">{streak} 🔥</div><div className="text-xs">consistency builds officers</div></CardContent></Card>
-        <Card><CardHeader><CardTitle>Today</CardTitle></CardHeader><CardContent className="text-text"><div className="font-mono text-2xl">{computed.completion}%</div><div className="text-xs">{computed.doneToday}/{computed.todaysTasks.length} tasks completed</div></CardContent></Card>
-        <Card><CardHeader><CardTitle>This week</CardTitle></CardHeader><CardContent className="text-text"><div className="font-mono text-2xl">{computed.hoursWeek.toFixed(1)}h</div><div className="text-xs">hours studied</div></CardContent></Card>
-      </div>
+
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle>Today's tasks</CardTitle><Link href="/tracker" className="text-xs text-accent">Open tracker</Link></CardHeader>
+          <CardHeader><CardTitle>Topic progress</CardTitle><Link href="/tracker" className="text-xs text-accent hover:underline">View all</Link></CardHeader>
           <CardContent>
-            {computed?.todaysTasks.length ? <ul className="space-y-2 text-text">{computed.todaysTasks.map((t:any)=>(<li key={t.id} className="flex items-center justify-between border border-border rounded-lg px-3 py-2"><span className={t.completed?"line-through text-muted":""}>{t.title}</span><span className="text-xs text-muted">{t.completed?"Done":"Pending"}</span></li>))}</ul> : <p>No tasks due today. <Link href="/tracker" className="text-accent">Add tasks</Link>.</p>}
+            <ul className="space-y-2.5 text-text">{topics.slice(0,6).map((t:any)=>(<li key={t.id} className="flex items-center justify-between gap-3 border-b border-border/40 pb-2 last:border-0 last:pb-0"><span className="text-sm">{t.name}</span><span className="text-xs text-muted capitalize">{t.status?.replace("_"," ")} • {t.confidence}/5</span></li>))}</ul>
+            {!topics.length && <p className="text-sm text-muted">No topics yet. Complete onboarding to initialize your tracker.</p>}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Topic progress</CardTitle><Link href="/tracker" className="text-xs text-accent">View all</Link></CardHeader>
-          <CardContent>
-            <ul className="space-y-2 text-text">{topics.slice(0,6).map((t:any)=>(<li key={t.id} className="flex items-center justify-between"><span>{t.name}</span><span className="text-xs text-muted">{t.status} • {t.confidence}/5</span></li>))}</ul>
-            {!topics.length && <p>No topics yet. Complete onboarding.</p>}
+          <CardHeader><CardTitle>News & current affairs</CardTitle><Link href="/knowledge" className="text-xs text-accent hover:underline">More</Link></CardHeader>
+          <CardContent className="space-y-2.5">
+            {news.length ? news.map((n:any)=>(<div key={n.id||n.url} className="border border-border rounded-xl p-3 text-text bg-background/20"><a href={n.url} target="_blank" rel="noreferrer" className="font-medium hover:text-accent text-sm leading-6">{n.title}</a>{n.summary && <p className="text-sm mt-1 text-muted"><span className="text-accent">AI summary:</span> {n.summary}</p>}</div>)) : <p className="text-muted text-sm">No cached news yet. Open Knowledge to fetch current affairs (server API keys required).</p>}
           </CardContent>
         </Card>
       </div>
+
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle>News & current affairs</CardTitle><Link href="/knowledge" className="text-xs text-accent">More</Link></CardHeader>
+          <CardHeader><CardTitle>Upcoming reminders</CardTitle><Link href="/settings" className="text-xs text-accent hover:underline">Manage</Link></CardHeader>
+          <CardContent>{reminders.length ? reminders.map((r:any)=>(<div key={r.id} className="border border-border rounded-xl p-3 text-text bg-background/20"><div className="font-medium text-sm">{r.title}</div></div>)) : <p className="text-muted text-sm">No reminders stored locally. Browser-only mode does not run server cron emails.</p>}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Practice guidance</CardTitle><Link href="/analytics" className="text-xs text-accent hover:underline">Open analytics</Link></CardHeader>
           <CardContent className="space-y-2">
-            {news.length ? news.map((n:any)=>(<div key={n.id||n.url} className="border border-border rounded-lg p-3 text-text"><a href={n.url} target="_blank" rel="noreferrer" className="font-medium hover:text-accent">{n.title}</a>{n.summary && <p className="text-sm mt-1"><span className="text-accent">AI summary:</span> {n.summary}</p>}</div>)) : <p className="text-muted text-sm">No cached news in local storage. Use Knowledge page to fetch via API (requires server keys) and save items locally.</p>}
+            <p className="text-sm text-muted leading-6">AI feedback and analytics are for <span className="text-text font-medium">practice guidance only</span>, never selection predictions. Consistent daily lessons, honest reflection, and disciplined fitness build real readiness.</p>
+            <div className="rounded-xl border border-accent/20 bg-accent/5 p-3 text-sm text-text/90">Tip: complete today’s lesson, log your study/workout, and review progress in Analytics to maintain your streak.</div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader><CardTitle>Upcoming reminders</CardTitle><Link href="/settings" className="text-xs text-accent">Manage</Link></CardHeader>
-          <CardContent>{reminders.length ? reminders.map((r:any)=>(<div key={r.id} className="border border-border rounded-lg p-2 text-text"><div className="font-medium">{r.title}</div></div>)) : <p className="text-muted text-sm">No reminders stored locally. Browser-only mode cannot run server cron emails.</p>}</CardContent>
-        </Card>
       </div>
-      <Card>
-        <CardHeader><CardTitle>OLQ & analytics</CardTitle><Link href="/analytics" className="text-xs text-accent">Open</Link></CardHeader>
-        <CardContent><p className="text-sm text-muted">Practice guidance only, never selection predictions. Local mode stores practice/OLQ data in this browser.</p></CardContent>
-      </Card>
     </div>
   );
 }

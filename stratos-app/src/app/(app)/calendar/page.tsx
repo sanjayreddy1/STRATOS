@@ -9,16 +9,21 @@ function ymd(d: Date) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(
 
 export default function CalendarPage() {
   const [store, setStore] = useState<any>(null);
-  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [month, setMonth] = useState<Date | null>(null);
   const [selected, setSelected] = useState("");
+  const [todayKey, setTodayKey] = useState("");
 
   useEffect(() => {
+    const now = new Date();
     const s = loadStore();
     setStore(s);
-    setSelected(ymd(new Date()));
+    setMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    setSelected(ymd(now));
+    setTodayKey(ymd(now));
   }, []);
 
   const days = useMemo(() => {
+    if (!month) return [] as (Date | null)[];
     const start = new Date(month.getFullYear(), month.getMonth(), 1);
     const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
     const startDay = start.getDay();
@@ -40,8 +45,7 @@ export default function CalendarPage() {
   }, [store]);
 
   const sel = selected ? byDate[selected] : null;
-  const monthLabel = month.toLocaleString(undefined, { month: "long", year: "numeric" });
-  const todayKey = ymd(new Date());
+  const monthLabel = month ? month.toLocaleString(undefined, { month: "long", year: "numeric" }) : "Loading...";
 
   return (
     <div className="space-y-5">
@@ -55,12 +59,12 @@ export default function CalendarPage() {
       <div className="grid lg:grid-cols-[1.25fr_1fr] gap-4">
         <Card>
           <CardHeader className="items-center">
-            <button className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-border hover:bg-surface-raised" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth()-1, 1))} aria-label="Previous month"><ChevronLeft size={18} /></button>
+            <button className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-border hover:bg-surface-raised disabled:opacity-40" disabled={!month} onClick={() => month && setMonth(new Date(month.getFullYear(), month.getMonth()-1, 1))} aria-label="Previous month"><ChevronLeft size={18} /></button>
             <div className="text-center">
               <CardTitle className="text-lg">{monthLabel}</CardTitle>
               <div className="text-xs text-muted">Tap a date to view details</div>
             </div>
-            <button className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-border hover:bg-surface-raised" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth()+1, 1))} aria-label="Next month"><ChevronRight size={18} /></button>
+            <button className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-border hover:bg-surface-raised disabled:opacity-40" disabled={!month} onClick={() => month && setMonth(new Date(month.getFullYear(), month.getMonth()+1, 1))} aria-label="Next month"><ChevronRight size={18} /></button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-7 gap-1.5 text-xs text-muted mb-2">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=><div key={d} className="text-center py-1 font-medium">{d}</div>)}</div>
