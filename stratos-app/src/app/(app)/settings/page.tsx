@@ -9,10 +9,12 @@ export default function SettingsPage() {
   const [prefs, setPrefs] = useState<any>({ paused_all: false });
   const [profile, setProfile] = useState<any>({ name: "", target_date: "", engineering_branch: "", daily_hours: 2 });
   const [saved, setSaved] = useState(false);
+  const [minDate, setMinDate] = useState("");
   useEffect(() => {
     const s = loadStore();
     setPrefs(s.email_preferences || { paused_all: false });
     setProfile({ name: s.profile?.name || "", target_date: s.profile?.target_date || "", engineering_branch: s.profile?.engineering_branch || "", daily_hours: s.profile?.daily_hours ?? 2 });
+    setMinDate(new Date().toISOString().slice(0,10));
   }, []);
   function toggle(key: string) {
     const next = { ...prefs, [key]: !prefs[key] };
@@ -57,7 +59,7 @@ export default function SettingsPage() {
         <CardContent>
           <form onSubmit={saveProfile} className="grid sm:grid-cols-2 gap-4 text-text">
             <div><label className="text-xs text-muted">Name</label><input value={profile.name} onChange={e=>setProfile({...profile,name:e.target.value})} className="mt-1 h-11 w-full rounded-xl border border-border bg-surface-raised/80 px-3.5 text-sm focus:border-accent/60 focus:ring-2 focus:ring-accent/15 outline-none" placeholder="Your name" /></div>
-            <div><label className="text-xs text-muted">Target SSB date</label><input type="date" value={profile.target_date||""} onChange={e=>setProfile({...profile,target_date:e.target.value})} className="mt-1 h-11 w-full rounded-xl border border-border bg-surface-raised/80 px-3.5 text-sm focus:border-accent/60 focus:ring-2 focus:ring-accent/15 outline-none" /></div>
+            <div><label className="text-xs text-muted">Target SSB date</label><input type="date" min={minDate || undefined} value={profile.target_date||""} onChange={e=>setProfile({...profile,target_date:e.target.value})} className="mt-1 h-11 w-full rounded-xl border border-border bg-surface-raised/80 px-3.5 text-sm focus:border-accent/60 focus:ring-2 focus:ring-accent/15 outline-none" /></div>
             <div><label className="text-xs text-muted">Engineering branch</label><input value={profile.engineering_branch||""} onChange={e=>setProfile({...profile,engineering_branch:e.target.value})} className="mt-1 h-11 w-full rounded-xl border border-border bg-surface-raised/80 px-3.5 text-sm focus:border-accent/60 focus:ring-2 focus:ring-accent/15 outline-none" placeholder="e.g. Computer Science" /></div>
             <div><label className="text-xs text-muted">Daily study hours</label><input type="number" step="0.5" min="0" value={profile.daily_hours??""} onChange={e=>setProfile({...profile,daily_hours:e.target.value})} className="mt-1 h-11 w-full rounded-xl border border-border bg-surface-raised/80 px-3.5 text-sm focus:border-accent/60 focus:ring-2 focus:ring-accent/15 outline-none" /></div>
             <div className="sm:col-span-2 flex items-center gap-3 pt-1">

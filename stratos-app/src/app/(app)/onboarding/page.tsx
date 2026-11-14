@@ -14,6 +14,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [minDate, setMinDate] = useState("");
   const [form, setForm] = useState({
     name: "", timezone: "Asia/Kolkata",
     age: "", branch: "", graduation_year: "", target_date: "",
@@ -22,9 +23,13 @@ export default function OnboardingPage() {
   });
   useEffect(() => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata";
-    const defaultTarget = fmt(addMonths(new Date(), 18));
+    const today = new Date();
+    const minD = fmt(today);
+    const defaultTarget = fmt(addMonths(today, 18));
     const s = loadStore();
+    setMinDate(minD);
     if (s.profile) {
+      const existing = s.profile.target_date && s.profile.target_date >= minD ? s.profile.target_date : defaultTarget;
       setForm(f => ({
         ...f,
         name: s.profile.name || f.name,
@@ -32,7 +37,7 @@ export default function OnboardingPage() {
         age: s.profile.age != null ? String(s.profile.age) : f.age,
         branch: s.profile.engineering_branch || f.branch,
         graduation_year: s.profile.graduation_year != null ? String(s.profile.graduation_year) : f.graduation_year,
-        target_date: s.profile.target_date || defaultTarget,
+        target_date: existing,
         daily_hours: s.profile.daily_hours != null ? String(s.profile.daily_hours) : f.daily_hours,
         preferred_reminder_time: s.profile.preferred_reminder_time || f.preferred_reminder_time,
       }));
@@ -86,6 +91,9 @@ export default function OnboardingPage() {
   const field = (label: string, key: keyof typeof form, type="text", props: any={}) => (
     <div><label className="text-xs text-muted">{label}</label><Input type={type} value={(form as any)[key]} onChange={e=>set(key, e.target.value)} className="mt-1" {...props} /></div>
   );
+  const targetDateField = (label: string) => (
+    <div><label className="text-xs text-muted">{label}</label><Input type="date" min={minDate || undefined} value={form.target_date} onChange={e=>set("target_date", e.target.value)} className="mt-1" required /></div>
+  );
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
@@ -109,7 +117,7 @@ export default function OnboardingPage() {
             {field("Age","age","number",{min:0})}
             {field("Engineering branch","branch","text",{placeholder:"e.g. Mechanical Engineering"})}
             {field("Graduation year","graduation_year","number")}
-            {field("Target SSB date","target_date","date",{required:true})}
+            {targetDateField("Target SSB date")}
             {field("Daily study hours","daily_hours","number",{step:"0.5", min:0})}
             {field("Preferred reminder time","preferred_reminder_time","time")}
           </CardContent>

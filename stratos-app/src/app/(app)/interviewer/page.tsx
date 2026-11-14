@@ -7,13 +7,23 @@ import { Mic, MicOff, Volume2, VolumeX, Square, Send, RotateCcw, Sparkles, UserC
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-function pickMicrosoftVoice(voices: SpeechSynthesisVoice[], selected?: string) {
-  if (selected) {
-    const v = voices.find(x => x.name === selected);
-    if (v) return v;
-  }
+function cleanInterviewText(text: string) {
+  return String(text || "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function pickMicrosoftRaviVoice(voices: SpeechSynthesisVoice[]) {
   const ms = voices.filter(v => /microsoft/i.test(v.name));
-  return ms.find(v => /en-IN|india/i.test(`${v.lang} ${v.name}`)) || ms.find(v => /en/i.test(v.lang)) || ms[0] || voices.find(v => /en/i.test(v.lang)) || voices[0];
+  return (
+    ms.find(v => /ravi/i.test(v.name) && /en[-_]?in/i.test(`${v.lang} ${v.name}`)) ||
+    ms.find(v => /ravi/i.test(v.name)) ||
+    voices.find(v => /ravi/i.test(v.name))
+  );
 }
 
 export default function InterviewerPage() {
@@ -24,9 +34,9 @@ export default function InterviewerPage() {
   const [error, setError] = useState<string | null>(null);
   const [voiceOn, setVoiceOn] = useState(true);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [voiceName, setVoiceName] = useState<string>("");
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState({ tts: false, stt: false });
+  const [voiceReady, setVoiceReady] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const lastSpokenRef = useRef<number>(-1);
@@ -43,7 +53,7 @@ export default function InterviewerPage() {
       const loadVoices = () => {
         const vs = window.speechSynthesis.getVoices();
         setVoices(vs);
-        setVoiceName(prev => prev || pickMicrosoftVoice(vs)?.name || "");
+        setVoiceReady(!!pickMicrosoftRaviVoice(vs));
       };
       loadVoices();
       window.speechSynthesis.onvoiceschanged = loadVoices;
@@ -73,10 +83,11 @@ export default function InterviewerPage() {
   function speak(text: string) {
     if (!voiceOn || !speechSupported.tts || !text) return;
     try {
+      const v = pickMicrosoftRaviVoice(voices);
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      const v = pickMicrosoftVoice(voices, voiceName);
-      if (v) { u.voice = v; u.lang = v.lang; }
+      if (v) { u.voice = v; u.lang = v.lang || "en-IN"; }
+      else { u.lang = "en-IN"; }
       u.rate = 1; u.pitch = 1;
       window.speechSynthesis.speak(u);
     } catch {}
@@ -93,7 +104,7 @@ export default function InterviewerPage() {
       speak(messages[idx].content);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, voiceOn, voiceName, voices]);
+  }, [messages, voiceOn, voices]);
 
   async function ask(nextMessages: Msg[]) {
     setLoading(true); setError(null);
@@ -105,7 +116,7 @@ export default function InterviewerPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to get interviewer response");
-      setMessages(prev => [...prev, { role: "assistant", content: data.question }]);
+      setMessages(prev => [...prev, { role: "assistant", content: cleanInterviewText(data.question) }]);
     } catch (e: any) {
       setError(e?.message || "Failed to reach AI interviewer");
     } finally {
@@ -119,6 +130,12 @@ export default function InterviewerPage() {
     setMessages([]);
     await ask([]);
   }
+
+  // clean any legacy messages if present
+  useEffect(() => {
+    setMessages(prev => prev.map(m => m.role === "assistant" ? { ...m, content: cleanInterviewText(m.content) } : m));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function sendText(text: string) {
     if (!text.trim() || loading) return;
@@ -171,8 +188,6 @@ export default function InterviewerPage() {
     }
   }
 
-  const msVoices = voices.filter(v => /microsoft/i.test(v.name));
-
   return (
     <div className="space-y-5">
       <div>
@@ -211,7 +226,7 @@ export default function InterviewerPage() {
           </Card>
 
           <Card>
-            <CardHeader><div><CardTitle>Voice settings</CardTitle><div className="text-xs text-muted mt-1">Best experience in Microsoft Edge (Windows)</div></div></CardHeader>
+            <CardHeader><div><CardTitle>Voice settings</CardTitle><div className="text-xs text-muted mt-1">Fixed interviewer voice</div></div></CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => { setVoiceOn(v=>!v); if (voiceOn) stopSpeaking(); }} className="h-10 px-3 rounded-xl border border-border hover:bg-surface-raised inline-flex items-center gap-2 text-sm flex-1 justify-center">
@@ -219,14 +234,12 @@ export default function InterviewerPage() {
                 </button>
                 <button type="button" onClick={stopSpeaking} className="h-10 px-3 rounded-xl border border-border hover:bg-surface-raised inline-flex items-center gap-2 text-sm"><Square size={14} /> Stop</button>
               </div>
-              <div>
-                <label className="text-xs text-muted">Interviewer voice (Microsoft preferred)</label>
-                <select value={voiceName} onChange={e=>setVoiceName(e.target.value)} className="mt-1 w-full h-11 rounded-xl border border-border bg-surface-raised/80 px-3 text-sm outline-none focus:border-accent/60" disabled={!speechSupported.tts}>
-                  <option value="">Auto (prefer Microsoft)</option>
-                  {(msVoices.length ? msVoices : voices).slice(0,30).map(v => <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>)}
-                </select>
+              <div className="rounded-xl border border-border bg-background/30 p-3">
+                <div className="text-xs text-muted">Interviewer voice</div>
+                <div className="font-medium text-text mt-0.5">Microsoft Ravi (Male, en-IN)</div>
+                <div className={`text-xs mt-1 ${voiceReady ? "text-success" : "text-muted"}`}>{speechSupported.tts ? (voiceReady ? "Voice available on this device/browser." : "Ravi voice not detected yet; browser will try to use it if installed (best in Microsoft Edge on Windows).") : "Text-to-speech not supported in this browser."}</div>
               </div>
-              <p className="text-xs text-muted">Microphone uses browser speech recognition; interviewer replies use text-to-speech. Requires server AI keys and dev server restart.</p>
+              <p className="text-xs text-muted">Microphone uses browser speech recognition; interviewer replies are spoken using only Microsoft Ravi when available.</p>
             </CardContent>
           </Card>
         </div>

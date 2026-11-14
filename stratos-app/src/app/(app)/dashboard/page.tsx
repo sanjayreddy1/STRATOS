@@ -111,64 +111,86 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5">
-      <section className="relative min-h-[72svh] lg:min-h-[78svh] rounded-3xl overflow-hidden border border-border/80 shadow-xl shadow-black/20">
+      <section className="relative rounded-3xl overflow-hidden border border-border/80 shadow-xl shadow-black/20 lg:min-h-[78svh]">
+        {/* Desktop: background hero image */}
         <img
           src={image.src}
           alt={image.alt}
-          className="absolute inset-0 h-full w-full object-cover scale-[1.01]"
+          className="hidden lg:block absolute inset-0 h-full w-full object-cover scale-[1.01]"
           loading="eager"
           onError={() => setImageIndex(i => (i + 1) % ARMY_IMAGES.length)}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/40 to-background/95" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-transparent to-black/25" />
-        <div className="relative z-10 min-h-[72svh] lg:min-h-[78svh] flex flex-col justify-between p-4 sm:p-6 md:p-8">
+        <div className="hidden lg:block absolute inset-0 bg-gradient-to-b from-black/65 via-black/40 to-background/95" />
+        <div className="hidden lg:block absolute inset-0 bg-gradient-to-r from-black/55 via-transparent to-black/25" />
+
+        {/* Mobile: image as regular element */}
+        <div className="lg:hidden relative">
+          <img
+            src={image.src}
+            alt={image.alt}
+            className="w-full h-56 sm:h-72 md:h-80 object-cover"
+            loading="eager"
+            onError={() => setImageIndex(i => (i + 1) % ARMY_IMAGES.length)}
+          />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-surface to-transparent" />
+          <div className="absolute bottom-2 left-3 right-3 flex items-center justify-between gap-2">
+            <div className="text-xs text-white/90 bg-black/40 backdrop-blur rounded-lg px-2.5 py-1.5 border border-white/15 line-clamp-1">{image.alt}</div>
+            <div className="flex gap-1.5 shrink-0">
+              {ARMY_IMAGES.map((img, i) => (
+                <button key={img.src} onClick={() => setImageIndex(i)} className={`h-2.5 rounded-full transition-all ${i===imageIndex?"bg-accent w-6":"bg-white/60 w-2.5 hover:bg-white/80"}`} aria-label={`Show image ${i+1}`} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="relative z-10 lg:min-h-[78svh] flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-surface lg:bg-transparent">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/25 backdrop-blur px-3 py-1 text-xs text-accent uppercase tracking-wider">
+              <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 lg:border-white/20 bg-primary/10 lg:bg-black/25 lg:backdrop-blur px-3 py-1 text-xs text-accent uppercase tracking-wider">
                 <Sparkles size={12}/> Indian Army SSB Preparation
               </div>
-              <h1 className="font-heading text-3xl sm:text-4xl md:text-5xl font-semibold mt-3 text-white leading-tight">Jai Hind{profile?.name ? `, ${profile.name}` : ""}</h1>
-              <p className="text-white/85 text-sm sm:text-base mt-3 max-w-xl leading-7">Service Before Self. {profile?.onboarding_completed ? "Your preparation profile is saved locally and ready." : "Complete your profile in Settings/Onboarding to personalize your mission plan."}</p>
+              <h1 className="font-heading text-3xl sm:text-4xl md:text-5xl font-semibold mt-3 text-text lg:text-white leading-tight">Jai Hind{profile?.name ? `, ${profile.name}` : ""}</h1>
+              <p className="text-muted lg:text-white/85 text-sm sm:text-base mt-3 max-w-xl leading-7">Service Before Self. {profile?.onboarding_completed ? "Your preparation profile is saved locally and ready." : "Complete your profile in Settings/Onboarding to personalize your mission plan."}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Link href="/calendar" className="inline-flex items-center gap-2 text-sm px-3.5 py-2 rounded-xl border border-white/25 bg-white/10 hover:bg-white/20 text-white backdrop-blur"><CalendarDays size={15}/> Calendar</Link>
-                <Link href="/interviewer" className="inline-flex items-center gap-2 text-sm px-3.5 py-2 rounded-xl border border-accent/40 bg-accent/20 hover:bg-accent/30 text-white backdrop-blur"><Mic size={15}/> AI Interviewer</Link>
-                <Link href="/analytics" className="inline-flex items-center gap-2 text-sm px-3.5 py-2 rounded-xl border border-white/25 bg-black/20 hover:bg-black/30 text-white backdrop-blur"><TrendingUp size={15}/> Analytics</Link>
+                <Link href="/calendar" className="inline-flex items-center gap-2 text-sm px-3.5 py-2 rounded-xl border border-border lg:border-white/25 bg-surface-raised lg:bg-white/10 hover:bg-surface-raised/80 lg:hover:bg-white/20 text-text lg:text-white lg:backdrop-blur"><CalendarDays size={15}/> Calendar</Link>
+                <Link href="/interviewer" className="inline-flex items-center gap-2 text-sm px-3.5 py-2 rounded-xl border border-accent/40 bg-accent/15 lg:bg-accent/20 hover:bg-accent/25 lg:hover:bg-accent/30 text-accent lg:text-white lg:backdrop-blur"><Mic size={15}/> AI Interviewer</Link>
+                <Link href="/analytics" className="inline-flex items-center gap-2 text-sm px-3.5 py-2 rounded-xl border border-border lg:border-white/25 bg-surface-raised lg:bg-black/20 hover:bg-surface-raised/80 lg:hover:bg-black/30 text-text lg:text-white lg:backdrop-blur"><TrendingUp size={15}/> Analytics</Link>
               </div>
             </div>
 
-            <div className="w-full lg:w-[360px] rounded-2xl border border-white/20 bg-black/35 backdrop-blur-md p-4 sm:p-5 text-white space-y-4">
+            <div className="w-full lg:w-[360px] rounded-2xl border border-border lg:border-white/20 bg-background/30 lg:bg-black/35 lg:backdrop-blur-md p-4 sm:p-5 text-text lg:text-white space-y-4">
               <div>
                 <div className="text-accent font-medium text-sm flex items-center gap-2"><Target size={15}/> Task of the Day</div>
                 <div className="mt-1.5 text-sm sm:text-base leading-6">{taskOfDay.title}</div>
-                {taskOfDay.suggested && <div className="text-xs text-white/70 mt-1">Suggested from today's SSB lesson</div>}
+                {taskOfDay.suggested && <div className="text-xs text-muted lg:text-white/70 mt-1">Suggested from today's SSB lesson</div>}
               </div>
-              <div className="border-t border-white/15 pt-3">
+              <div className="border-t border-border lg:border-white/15 pt-3">
                 <div className="text-accent font-medium text-sm flex items-center gap-2"><BookOpen size={15}/> Lesson of the Day</div>
                 <div className="mt-1.5 text-sm leading-6">{lesson.topic}</div>
-                <div className="text-xs text-white/70 mt-1">{lesson.focus}</div>
+                <div className="text-xs text-muted lg:text-white/70 mt-1">{lesson.focus}</div>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-xl border border-white/15 bg-white/5 p-2"><div className="text-[10px] text-white/70">Countdown</div><div className="font-mono text-lg text-accent">{countdown ?? "—"}</div></div>
-                <div className="rounded-xl border border-white/15 bg-white/5 p-2"><div className="text-[10px] text-white/70">Lessons</div><div className="font-mono text-lg text-accent">{completedLessonsCount}</div></div>
-                <div className="rounded-xl border border-white/15 bg-white/5 p-2"><div className="text-[10px] text-white/70">Today</div><div className="font-mono text-lg text-accent">{computed.completion}%</div></div>
+                <div className="rounded-xl border border-border lg:border-white/15 bg-surface/60 lg:bg-white/5 p-2"><div className="text-[10px] text-muted lg:text-white/70">Countdown</div><div className="font-mono text-lg text-accent">{countdown ?? "—"}</div></div>
+                <div className="rounded-xl border border-border lg:border-white/15 bg-surface/60 lg:bg-white/5 p-2"><div className="text-[10px] text-muted lg:text-white/70">Lessons</div><div className="font-mono text-lg text-accent">{completedLessonsCount}</div></div>
+                <div className="rounded-xl border border-border lg:border-white/15 bg-surface/60 lg:bg-white/5 p-2"><div className="text-[10px] text-muted lg:text-white/70">Today</div><div className="font-mono text-lg text-accent">{computed.completion}%</div></div>
               </div>
             </div>
           </div>
 
           <div className="grid md:grid-cols-[1.3fr_1fr] gap-4 items-end mt-4">
-            <div className="rounded-2xl border border-white/20 bg-black/35 backdrop-blur-md p-4 sm:p-5">
+            <div className="rounded-2xl border border-border lg:border-white/20 bg-background/30 lg:bg-black/35 lg:backdrop-blur-md p-4 sm:p-5">
               <div className="text-accent text-xs uppercase tracking-wide mb-2">Indian Army Quote</div>
-              <blockquote className="text-white">
+              <blockquote className="text-text lg:text-white">
                 <p className="text-lg sm:text-xl md:text-2xl italic leading-relaxed">"{quote.quote}"</p>
-                <footer className="text-sm text-white/80 mt-3">— {quote.by}</footer>
+                <footer className="text-sm text-muted lg:text-white/80 mt-3">— {quote.by}</footer>
               </blockquote>
               <div className="mt-4 flex flex-wrap gap-1.5">
                 {ARMY_QUOTES.map((_, i) => (
-                  <button key={i} onClick={() => setQuoteIndex(i)} className={`h-2 w-2 rounded-full transition-all ${i===quoteIndex?"bg-accent w-5":"bg-white/40 hover:bg-white/70"}`} aria-label={`Show quote ${i+1}`} />
+                  <button key={i} onClick={() => setQuoteIndex(i)} className={`h-2 w-2 rounded-full transition-all ${i===quoteIndex?"bg-accent w-5":"bg-muted/50 lg:bg-white/40 hover:bg-accent/60 lg:hover:bg-white/70"}`} aria-label={`Show quote ${i+1}`} />
                 ))}
               </div>
             </div>
-            <div className="rounded-2xl border border-white/20 bg-black/35 backdrop-blur-md p-4 text-white">
+            <div className="hidden lg:block rounded-2xl border border-white/20 bg-black/35 backdrop-blur-md p-4 text-white">
               <div className="text-sm font-medium">{image.alt}</div>
               <div className="text-xs text-white/70 mt-1">{image.credit}</div>
               <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
