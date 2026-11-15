@@ -19,6 +19,7 @@ export type StratosStore = {
   notebook_entries: any[];
   lesson_progress: Record<string, boolean>;
   lesson_details: Record<string, any>;
+  lesson_interview_results: Record<string, any>;
 };
 
 const KEY = "stratos_store_v1";
@@ -42,6 +43,7 @@ export const defaultStore: StratosStore = {
   notebook_entries: [],
   lesson_progress: {},
   lesson_details: {},
+  lesson_interview_results: {},
 };
 
 export function loadStore(): StratosStore {

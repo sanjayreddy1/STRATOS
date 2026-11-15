@@ -11,6 +11,20 @@ export async function POST(req: NextRequest) {
   const recentTopics = context?.recentTopics || [];
   const dailyLogs = context?.dailyLogs || [];
   const workoutLogs = context?.workoutLogs || [];
+  const lesson = context?.lesson || null;
+
+  const lessonText = lesson ? `
+CURRENT LESSON TO INTERVIEW ON:
+- Lesson Day: ${lesson.day}
+- Topic: ${lesson.topic}
+- Focus: ${lesson.focus || ""}
+- SSB relevance: ${lesson.ssbLink || ""}
+- Objectives: ${(lesson.objectives || []).join("; ")}
+- Key points: ${(lesson.keyPoints || []).join("; ")}
+- Practice: ${lesson.practice || ""}
+- Reflection: ${lesson.reflection || ""}
+
+Conduct the interview primarily around this lesson/topic while still behaving like a real SSB IO. Ask questions that test understanding, application, examples from life, and officer-like thinking related to this lesson. You may include relevant PIQ/discipline/current-affairs follow-ups when natural, but keep the lesson as the core focus.` : "";
 
   const system = `You are an Interviewing Officer conducting a Personal Interview for an Indian Army SSB (TGC/SSC Tech entry) practice session.
 Frame every response as a real IO would: ask ONE direct, natural question at a time in clear spoken language.
@@ -30,8 +44,9 @@ Do not give selection predictions, scores, or verdicts. If the answer is vague, 
 - Recent topics tracked: ${recentTopics.slice(0, 10).join(", ") || "None"}
 - Recent study logs (summary): ${dailyLogs.slice(0, 5).map((l: any) => `${l.log_date}: ${l.hours_studied || 0}h`).join(", ") || "None"}
 - Recent workouts (summary): ${workoutLogs.slice(0, 5).map((w: any) => `${w.log_date}: ${w.workout_type || "workout"}`).join(", ") || "None"}
+${lessonText}
 
-Use this progress to tailor questions (e.g. ask more on topics they have studied/completed, and probe consistency/discipline based on logs). Start with an appropriate question if there is no conversation yet.`;
+Use this progress to tailor questions. Start with an appropriate question if there is no conversation yet.${lesson ? " Begin with the first interview question specifically related to the current lesson." : ""}`;
 
   const chat = Array.isArray(messages) ? messages.slice(-12) : [];
   const aiMessages = [

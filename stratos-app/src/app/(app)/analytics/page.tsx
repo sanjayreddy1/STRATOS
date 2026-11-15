@@ -2,8 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadStore } from "@/lib/local/store";
-import { SSB_DAILY_LESSONS } from "@/lib/data/daily-lessons";
-import { BookOpen, Flame, Target, Clock, Dumbbell, Brain, TrendingUp, CheckCircle2, Calendar } from "lucide-react";
+import { SSB_DAILY_LESSONS, isLessonModuleComplete } from "@/lib/data/daily-lessons";
+import { BookOpen, Flame, Target, Clock, Dumbbell, Brain, TrendingUp, CheckCircle2, Calendar, Award } from "lucide-react";
 
 function calcStreak(dateKeys: string[]) {
   if (!dateKeys.length) return { current: 0, best: 0 };
@@ -66,12 +66,14 @@ export default function AnalyticsPage() {
     const workouts30 = workouts.filter((w: any) => w.log_date && Date.now() - new Date(w.log_date + "T00:00:00").getTime() <= 30 * 86400000);
     const olq = s.olq_scores || [];
     const progress = s.lesson_progress || {};
-    const completedDates = Object.keys(progress).filter(k => progress[k]).sort();
-    const completedCount = completedDates.length;
-    const streak = calcStreak(completedDates);
+    const results = s.lesson_interview_results || {};
+    // support both new progression keys (lesson day "1") and legacy date keys
+    const dayKeys = Object.keys(progress).filter(k => progress[k] && /^\d+$/.test(k)).sort((a,b)=>Number(a)-Number(b));
+    const dateKeys = Object.keys(progress).filter(k => progress[k] && /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+    const completedModuleDays = dayKeys.filter(k => isLessonModuleComplete(s, Number(k)));
+    const completedCount = dayKeys.length || dateKeys.length;
+    const streak = calcStreak(dateKeys);
     const detailedCount = Object.keys(s.lesson_details || {}).length;
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const todayDone = !!progress[todayKey];
     const totalHours30 = logs30.reduce((sum: number, l: any) => sum + Number(l.hours_studied || 0), 0);
     const totalHours7 = logs7.reduce((sum: number, l: any) => sum + Number(l.hours_studied || 0), 0);
     const doneTasks = logs30.reduce((sum: number, l: any) => sum + Number(l.completed_tasks || 0), 0);
@@ -83,18 +85,25 @@ export default function AnalyticsPage() {
     const tasks = s.tasks || [];
     const tasksDone = tasks.filter((t: any) => t.status === "done" || t.completed).length;
 
-    // recent completed lessons mapped to topics
-    const lessonByDay = new Map(SSB_DAILY_LESSONS.map(l => [l.day, l]));
-    const recentCompleted = completedDates.slice(-7).reverse().map(dk => {
-      // infer lesson by date same as getDailyLesson logic
-      const date = new Date(dk + "T12:00:00");
-      const start = new Date(date.getFullYear(), 0, 0);
-      const diff = date.getTime() - start.getTime();
-      const dayOfYear = Math.floor(diff / 86400000);
-      const idx = (dayOfYear - 1 + SSB_DAILY_LESSONS.length) % SSB_DAILY_LESSONS.length;
-      const lesson = SSB_DAILY_LESSONS[idx];
-      return { date: dk, topic: lesson?.topic || "SSB Lesson", day: lesson?.day, hasDetail: !!s.lesson_details?.[dk] };
-    });
+    const recentCompleted = dayKeys.length
+      ? dayKeys.slice(-7).reverse().map(k => {
+          const n = Number(k);
+          const lesson = SSB_DAILY_LESSONS.find(x => x.day === n);
+          const ev = results[k];
+          return { date: `Day ${n}`, topic: lesson?.topic || "SSB Lesson", day: n, hasDetail: !!s.lesson_details?.[k], score: ev?.score, interviewDone: !!ev?.completed };
+        })
+      : dateKeys.slice(-7).reverse().map(dk => {
+          const date = new Date(dk + "T12:00:00");
+          const start = new Date(date.getFullYear(), 0, 0);
+          const diff = date.getTime() - start.getTime();
+          const dayOfYear = Math.floor(diff / 86400000);
+          const idx = (dayOfYear - 1 + SSB_DAILY_LESSONS.length) % SSB_DAILY_LESSONS.length;
+          const lesson = SSB_DAILY_LESSONS[idx];
+          return { date: dk, topic: lesson?.topic || "SSB Lesson", day: lesson?.day, hasDetail: !!s.lesson_details?.[dk] };
+        });
+    const todayLessonDone = dayKeys.length ? !!progress[String(dayKeys[dayKeys.length-1])] : false; // rough; dashboard shows precise
+    const interviewCompletedCount = Object.values(results).filter((r: any) => r?.completed).length;
+    const avgInterviewScore = interviewCompletedCount ? Math.round(Object.values(results).filter((r: any)=>r?.completed).reduce((sum:number,r:any)=>sum + Number(r.score||0),0)/interviewCompletedCount) : 0;
 
     // weekly study bars (last 7 days including today)
     const weekBars: { label: string; hours: number }[] = [];
@@ -106,13 +115,13 @@ export default function AnalyticsPage() {
     }
     const maxWeekHours = Math.max(1, ...weekBars.map(b => b.hours), Number(s.profile?.daily_hours || 2));
 
-    return { logs, logs30, workouts, workouts30, olq, completedCount, completedDates, streak, detailedCount, todayDone, totalHours30, totalHours7, doneTasks, plannedTasks, completion, avgHours7, studyDays30, topicsTracked, tasks, tasksDone, recentCompleted, weekBars, maxWeekHours };
+    return { logs, logs30, workouts, workouts30, olq, completedCount, completedModuleDays, streak, detailedCount, totalHours30, totalHours7, doneTasks, plannedTasks, completion, avgHours7, studyDays30, topicsTracked, tasks, tasksDone, recentCompleted, weekBars, maxWeekHours, interviewCompletedCount, avgInterviewScore };
   }, [s]);
 
   if (!s || !data) return <div className="text-muted">Loading analytics...</div>;
 
   const cycleSize = SSB_DAILY_LESSONS.length;
-  const cycleProgress = data.completedCount % cycleSize || (data.completedCount > 0 ? cycleSize : 0);
+  const cycleProgress = Math.min(cycleSize, data.completedCount);
   const cyclePct = Math.round((cycleProgress / cycleSize) * 100);
 
   return (
@@ -133,14 +142,14 @@ export default function AnalyticsPage() {
           <CardHeader className="mb-1"><CardTitle className="text-sm flex items-center gap-2"><BookOpen size={16} className="text-accent"/>Lessons studied</CardTitle></CardHeader>
           <CardContent>
             <div className="font-mono text-3xl text-accent">{data.completedCount}</div>
-            <div className="text-xs text-muted mt-1">{data.todayDone ? "Today's lesson completed" : "Today's lesson pending"}</div>
+            <div className="text-xs text-muted mt-1">Modules fully completed: {data.completedModuleDays.length}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="mb-1"><CardTitle className="text-sm flex items-center gap-2"><Flame size={16} className="text-accent"/>Learning streak</CardTitle></CardHeader>
+          <CardHeader className="mb-1"><CardTitle className="text-sm flex items-center gap-2"><Award size={16} className="text-accent"/>Interview evals</CardTitle></CardHeader>
           <CardContent>
-            <div className="font-mono text-3xl text-accent">{data.streak.current}<span className="text-base text-muted ml-1">days</span></div>
-            <div className="text-xs text-muted mt-1">Best: {data.streak.best} days</div>
+            <div className="font-mono text-3xl text-accent">{data.avgInterviewScore || 0}<span className="text-base text-muted ml-1">/100</span></div>
+            <div className="text-xs text-muted mt-1">{data.interviewCompletedCount} lesson interview(s) evaluated</div>
           </CardContent>
         </Card>
         <Card>
@@ -200,14 +209,17 @@ export default function AnalyticsPage() {
               <div className="text-sm font-medium mb-2">Recently completed lessons</div>
               {data.recentCompleted.length ? (
                 <div className="space-y-2">
-                  {data.recentCompleted.map((l, i) => (
+                  {data.recentCompleted.map((l: any, i: number) => (
                     <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2 text-sm">
                       <div className="flex items-center gap-2 min-w-0">
                         <CheckCircle2 size={16} className="text-success shrink-0" />
                         <span className="text-muted shrink-0">{l.date}</span>
-                        <span className="truncate text-text">Day {l.day}: {l.topic}</span>
+                        <span className="truncate text-text">{l.day ? `Day ${l.day}: ` : ""}{l.topic}</span>
                       </div>
-                      {l.hasDetail && <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent/40 text-accent shrink-0">Detailed</span>}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {typeof l.score === "number" && <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-accent">{l.score}/100</span>}
+                        {l.hasDetail && <span className="text-[10px] px-2 py-0.5 rounded-full border border-accent/40 text-accent">Detailed</span>}
+                      </div>
                     </div>
                   ))}
                 </div>

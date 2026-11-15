@@ -317,3 +317,38 @@ export function getDailyLesson(date = new Date()): DailyLesson & { dateKey: stri
   const lesson = SSB_DAILY_LESSONS[idx];
   return { ...lesson, dateKey: date.toISOString().slice(0, 10) };
 }
+
+export function getCurrentLesson(store?: any): DailyLesson & { lessonKey: string; index: number } {
+  const results = store?.lesson_interview_results || {};
+  const progress = store?.lesson_progress || {};
+  let idx = 0;
+  for (let i = 0; i < SSB_DAILY_LESSONS.length; i++) {
+    const l = SSB_DAILY_LESSONS[i];
+    const key = String(l.day);
+    const studied = !!progress[key] || !!progress[l.topic] || !!progress[`lesson_${l.day}`];
+    const interviewed = !!results[key]?.completed;
+    if (studied && interviewed) continue;
+    idx = i;
+    break;
+    // if not complete, this is current
+  }
+  // if all complete, show last lesson (or could cycle) - keep at last
+  const allComplete = SSB_DAILY_LESSONS.every(l => {
+    const key = String(l.day);
+    const studied = !!progress[key] || !!progress[l.topic] || !!progress[`lesson_${l.day}`];
+    const interviewed = !!results[key]?.completed;
+    return studied && interviewed;
+  });
+  if (allComplete) idx = SSB_DAILY_LESSONS.length - 1;
+  const lesson = SSB_DAILY_LESSONS[idx];
+  return { ...lesson, lessonKey: String(lesson.day), index: idx };
+}
+
+export function isLessonModuleComplete(store: any, lessonDay: number) {
+  const key = String(lessonDay);
+  const progress = store?.lesson_progress || {};
+  const results = store?.lesson_interview_results || {};
+  const studied = !!progress[key];
+  const interviewed = !!results[key]?.completed;
+  return studied && interviewed;
+}

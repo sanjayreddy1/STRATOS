@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { loadStore } from "@/lib/local/store";
-import { getDailyLesson } from "@/lib/data/daily-lessons";
-import { Mic, MicOff, Volume2, VolumeX, Square, Send, RotateCcw, Sparkles, UserCircle2 } from "lucide-react";
+import { loadStore, saveStore } from "@/lib/local/store";
+import { getCurrentLesson, SSB_DAILY_LESSONS } from "@/lib/data/daily-lessons";
+import { Mic, MicOff, Volume2, VolumeX, Square, Send, RotateCcw, Sparkles, UserCircle2, Award, CheckCircle2 } from "lucide-react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -37,12 +37,35 @@ export default function InterviewerPage() {
   const [listening, setListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState({ tts: false, stt: false });
   const [voiceReady, setVoiceReady] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
+  const [evaluation, setEvaluation] = useState<any>(null);
+  const [lesson, setLesson] = useState<any>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const lastSpokenRef = useRef<number>(-1);
 
-  useEffect(() => { setStore(loadStore()); }, []);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+  function refreshLesson(s: any) {
+    let param: string | null = null;
+    if (typeof window !== "undefined") {
+      param = new URLSearchParams(window.location.search).get("lesson");
+    }
+    const day = param ? Number(param) : null;
+    let l = null;
+    if (day && !Number.isNaN(day)) l = SSB_DAILY_LESSONS.find(x => x.day === day) || null;
+    if (!l) l = getCurrentLesson(s);
+    const lessonKey = String(l.day);
+    setLesson({ ...l, lessonKey });
+    setEvaluation(s?.lesson_interview_results?.[lessonKey] || null);
+  }
+
+  useEffect(() => {
+    const s = loadStore();
+    setStore(s);
+    refreshLesson(s);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading, evaluation]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -66,9 +89,12 @@ export default function InterviewerPage() {
     const progress = s.lesson_progress || {};
     const completedKeys = Object.keys(progress).filter(k => progress[k]).sort();
     const completedLessons = completedKeys.map(k => {
-      const [y,m,d] = k.split("-").map(Number);
-      if (!y || !m || !d) return k;
-      return getDailyLesson(new Date(y, m-1, d)).topic;
+      const n = Number(k);
+      if (!Number.isNaN(n)) {
+        const found = SSB_DAILY_LESSONS.find(x => x.day === n);
+        return found ? `Day ${found.day}: ${found.topic}` : k;
+      }
+      return k;
     });
     return {
       profile: s.profile || {},
@@ -77,8 +103,9 @@ export default function InterviewerPage() {
       recentTopics: (s.topics || []).filter((t: any) => t.status !== "not_started").map((t: any) => `${t.name} (${t.status})`),
       dailyLogs: (s.daily_logs || []).slice().sort((a:any,b:any)=>b.log_date.localeCompare(a.log_date)).slice(0, 7),
       workoutLogs: (s.workout_logs || []).slice().sort((a:any,b:any)=>b.log_date.localeCompare(a.log_date)).slice(0, 7),
+      lesson: lesson ? { day: lesson.day, topic: lesson.topic, focus: lesson.focus, ssbLink: lesson.ssbLink, objectives: lesson.objectives, keyPoints: lesson.keyPoints, practice: lesson.practice, reflection: lesson.reflection } : null,
     };
-  }, [store]);
+  }, [store, lesson]);
 
   function speak(text: string) {
     if (!voiceOn || !speechSupported.tts || !text) return;
@@ -128,14 +155,9 @@ export default function InterviewerPage() {
     stopSpeaking();
     lastSpokenRef.current = -1;
     setMessages([]);
+    setEvaluation(null);
     await ask([]);
   }
-
-  // clean any legacy messages if present
-  useEffect(() => {
-    setMessages(prev => prev.map(m => m.role === "assistant" ? { ...m, content: cleanInterviewText(m.content) } : m));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function sendText(text: string) {
     if (!text.trim() || loading) return;
@@ -188,39 +210,76 @@ export default function InterviewerPage() {
     }
   }
 
+  async function submitForEvaluation() {
+    if (!lesson || evaluating) return;
+    const userAnswers = messages.filter(m => m.role === "user").length;
+    if (userAnswers < 2) { setError("Answer at least 2 interview questions before submitting for evaluation."); return; }
+    setEvaluating(true); setError(null);
+    try {
+      const res = await fetch("/api/ai/interview-evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lesson, messages }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to evaluate interview");
+      const ev = { ...data.evaluation, completed: true, lessonDay: lesson.day, lessonTopic: lesson.topic };
+      const s = loadStore();
+      s.lesson_interview_results = s.lesson_interview_results || {};
+      s.lesson_interview_results[String(lesson.day)] = ev;
+      saveStore(s);
+      setStore(s);
+      setEvaluation(ev);
+      // refresh lesson selection in case module now complete and user wants next
+      const current = getCurrentLesson(s);
+      if (current.day !== lesson.day) {
+        // keep showing evaluated lesson results; dashboard will show next
+      }
+    } catch (e: any) {
+      setError(e?.message || "Evaluation failed");
+    } finally {
+      setEvaluating(false);
+    }
+  }
+
+  const userAnswerCount = messages.filter(m => m.role === "user").length;
+  const lessonKey = lesson ? String(lesson.day) : "";
+  const studied = !!(store?.lesson_progress?.[lessonKey]);
+  const interviewDone = !!evaluation?.completed;
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="page-title flex items-center gap-2"><Sparkles className="text-accent" size={24}/> AI Interviewer</h1>
-        <p className="page-subtitle mt-1">Voice-enabled Personal Interview practice tailored to your completed lessons, logs, and profile. Practice guidance only, never a selection prediction.</p>
+        <p className="page-subtitle mt-1">Lesson-based SSB interview practice with strict evaluation out of 100. Complete study + interview evaluation to unlock the next lesson.</p>
       </div>
 
-      <div className="grid lg:grid-cols-[340px_1fr] gap-4">
+      <div className="grid lg:grid-cols-[360px_1fr] gap-4">
         <div className="space-y-4">
           <Card>
-            <CardHeader><div><CardTitle>Candidate context</CardTitle><div className="text-xs text-muted mt-1">Used to personalize questions</div></div></CardHeader>
+            <CardHeader><div><CardTitle>Current lesson interview</CardTitle><div className="text-xs text-muted mt-1">Interview is conducted for this lesson</div></div></CardHeader>
             <CardContent className="text-sm space-y-3 text-text">
-              <div className="flex items-center gap-3 rounded-xl border border-border bg-background/30 p-3">
-                <div className="h-10 w-10 rounded-full bg-primary/20 border border-accent/30 flex items-center justify-center text-accent"><UserCircle2 size={20}/></div>
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{context.profile?.name || "Candidate profile not set"}</div>
-                  <div className="text-xs text-muted truncate">{context.profile?.engineering_branch || "Branch not set"}</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-border p-2.5 bg-background/20"><div className="text-[11px] text-muted">Lessons completed</div><div className="font-mono text-lg text-accent">{context.completedDays}</div></div>
-                <div className="rounded-xl border border-border p-2.5 bg-background/20"><div className="text-[11px] text-muted">Topics tracked</div><div className="font-mono text-lg text-accent">{context.recentTopics.length}</div></div>
-              </div>
-              <div>
-                <div className="text-xs text-muted mb-1.5">Recent completed lessons</div>
-                <div className="space-y-1.5">
-                  {context.completedLessons.slice(0,5).map((t:string,i:number)=><div key={i} className="text-xs rounded-lg border border-border/70 px-2.5 py-1.5 bg-surface-raised/40 text-text/90">{t}</div>)}
-                  {!context.completedLessons.length && <div className="text-xs text-muted rounded-lg border border-dashed border-border p-2.5">Complete daily lessons to personalize interview questions.</div>}
-                </div>
-              </div>
-              <button onClick={start} disabled={loading} className="w-full h-11 px-4 rounded-xl bg-primary text-[#0B0D0C] font-medium hover:bg-primary-hover disabled:opacity-50 inline-flex items-center justify-center gap-2">
-                <RotateCcw size={16}/> {messages.length ? "Restart interview" : "Start interview"}
-              </button>
+              {lesson ? (
+                <>
+                  <div className="rounded-xl border border-border bg-background/30 p-3">
+                    <div className="text-xs text-muted">Lesson Day {lesson.day}</div>
+                    <div className="font-medium mt-0.5">{lesson.topic}</div>
+                    <div className="text-xs text-muted mt-1">{lesson.focus}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-border p-2.5 bg-background/20"><div className="text-[11px] text-muted">Study status</div><div className={`font-medium ${studied ? "text-success" : "text-accent"}`}>{studied ? "Completed" : "Pending"}</div></div>
+                    <div className="rounded-xl border border-border p-2.5 bg-background/20"><div className="text-[11px] text-muted">Interview status</div><div className={`font-medium ${interviewDone ? "text-success" : "text-accent"}`}>{interviewDone ? "Evaluated" : "Pending"}</div></div>
+                  </div>
+                  {interviewDone && <div className="rounded-xl border border-accent/30 bg-accent/10 p-3"><div className="text-xs text-muted">Last score</div><div className="font-mono text-2xl text-accent">{evaluation.score}/100</div></div>}
+                  <button onClick={start} disabled={loading || evaluating} className="w-full h-11 px-4 rounded-xl bg-primary text-[#0B0D0C] font-medium hover:bg-primary-hover disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                    <RotateCcw size={16}/> {messages.length ? "Restart lesson interview" : "Start lesson interview"}
+                  </button>
+                  <button onClick={submitForEvaluation} disabled={evaluating || loading || userAnswerCount < 2} className="w-full h-11 px-4 rounded-xl border border-accent/40 text-accent bg-accent/10 hover:bg-accent/15 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                    <Award size={16}/> {evaluating ? "Evaluating..." : interviewDone ? "Re-evaluate interview" : "Submit for evaluation (out of 100)"}
+                  </button>
+                  <p className="text-xs text-muted">Answer at least 2 questions, then submit for strict senior-evaluator scoring. Irrelevant answers will be penalized and called out.</p>
+                </>
+              ) : <p className="text-muted">Loading lesson...</p>}
               {error && <p className="text-danger text-xs rounded-lg border border-danger/30 bg-danger/10 p-2">{error}</p>}
             </CardContent>
           </Card>
@@ -239,16 +298,31 @@ export default function InterviewerPage() {
                 <div className="font-medium text-text mt-0.5">Microsoft Ravi (Male, en-IN)</div>
                 <div className={`text-xs mt-1 ${voiceReady ? "text-success" : "text-muted"}`}>{speechSupported.tts ? (voiceReady ? "Voice available on this device/browser." : "Ravi voice not detected yet; browser will try to use it if installed (best in Microsoft Edge on Windows).") : "Text-to-speech not supported in this browser."}</div>
               </div>
-              <p className="text-xs text-muted">Microphone uses browser speech recognition; interviewer replies are spoken using only Microsoft Ravi when available.</p>
             </CardContent>
           </Card>
+
+          {evaluation && (
+            <Card>
+              <CardHeader><div><CardTitle className="flex items-center gap-2"><Award size={18} className="text-accent"/> Evaluation result</CardTitle><div className="text-xs text-muted mt-1">Strict senior evaluator assessment</div></div></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex items-end justify-between"><div><div className="text-xs text-muted">Score</div><div className="font-mono text-3xl text-accent">{evaluation.score}/100</div></div><div className={`text-xs px-2 py-1 rounded-full border ${evaluation.score >= 60 ? "text-success border-success/40" : "text-danger border-danger/40"}`}>{evaluation.score >= 60 ? "Satisfactory" : "Needs serious improvement"}</div></div>
+                {evaluation.verdict && <div><span className="text-accent font-medium">Verdict:</span> <span className="text-text/90">{evaluation.verdict}</span></div>}
+                {evaluation.relevance && <div><span className="text-accent font-medium">Relevance:</span> <span className="text-text/90">{evaluation.relevance}</span></div>}
+                {evaluation.scolding && <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-danger"><span className="font-medium">Senior evaluator remarks (strict):</span> {evaluation.scolding}</div>}
+                {Array.isArray(evaluation.strengths) && evaluation.strengths.length > 0 && <div><div className="text-accent font-medium mb-1">Strengths</div><ul className="list-disc pl-5 space-y-1 text-text/90">{evaluation.strengths.map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>}
+                {Array.isArray(evaluation.weaknesses) && evaluation.weaknesses.length > 0 && <div><div className="text-accent font-medium mb-1">Weaknesses</div><ul className="list-disc pl-5 space-y-1 text-text/90">{evaluation.weaknesses.map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>}
+                {Array.isArray(evaluation.improvements) && evaluation.improvements.length > 0 && <div><div className="text-accent font-medium mb-1">Improvements</div><ul className="list-disc pl-5 space-y-1 text-text/90">{evaluation.improvements.map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>}
+                {studied && interviewDone && <div className="rounded-lg border border-success/30 bg-success/10 p-2.5 text-success flex items-start gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0"/> Lesson module completed (study + interview). Go to Dashboard to continue with the next showcased lesson.</div>}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <Card className="min-h-[70vh] flex flex-col">
           <CardHeader className="border-b border-border/60 pb-3 mb-0">
             <div>
-              <CardTitle>Interview session</CardTitle>
-              <div className="text-xs text-muted mt-1">{messages.length ? "Answer clearly and honestly. Use mic or type." : "Start the session to receive your first question."}</div>
+              <CardTitle>Interview session {lesson ? `(Day ${lesson.day})` : ""}</CardTitle>
+              <div className="text-xs text-muted mt-1">{messages.length ? "Answer clearly and relevantly. Use mic or type." : "Start the lesson interview to receive your first question."}</div>
             </div>
             {listening && <span className="text-xs px-2.5 py-1 rounded-full border border-accent/40 text-accent bg-accent/10">Listening</span>}
           </CardHeader>
@@ -258,8 +332,8 @@ export default function InterviewerPage() {
                 <div className="h-full min-h-[240px] flex items-center justify-center">
                   <div className="text-center max-w-md rounded-2xl border border-dashed border-border p-6 bg-background/20">
                     <div className="mx-auto h-12 w-12 rounded-full bg-primary/20 border border-accent/30 flex items-center justify-center text-accent mb-3"><Mic size={20}/></div>
-                    <p className="text-sm text-text font-medium">Ready for mock interview</p>
-                    <p className="text-sm text-muted mt-1">Press <span className="text-text">Start interview</span>. The IO will ask questions based on your progress, and you can respond by voice or text.</p>
+                    <p className="text-sm text-text font-medium">Lesson interview: {lesson?.topic || "SSB"}</p>
+                    <p className="text-sm text-muted mt-1">Press <span className="text-text">Start lesson interview</span>. The IO will ask questions related to this lesson. After answering, submit for strict evaluation.</p>
                   </div>
                 </div>
               )}
@@ -269,15 +343,15 @@ export default function InterviewerPage() {
                   <div className="whitespace-pre-wrap leading-6 text-text/95">{m.content}</div>
                 </div>
               ))}
-              {loading && <div className="inline-flex items-center gap-2 text-sm text-muted rounded-xl border border-border bg-surface/50 px-3 py-2"><span className="h-2 w-2 rounded-full bg-accent animate-pulse"/> Interviewing Officer is thinking...</div>}
+              {(loading || evaluating) && <div className="inline-flex items-center gap-2 text-sm text-muted rounded-xl border border-border bg-surface/50 px-3 py-2"><span className="h-2 w-2 rounded-full bg-accent animate-pulse"/> {evaluating ? "Senior evaluator is assessing your interview..." : "Interviewing Officer is thinking..."}</div>}
               <div ref={endRef} />
             </div>
             <form onSubmit={send} className="mt-4 flex gap-2 items-end border-t border-border/60 pt-3">
-              <button type="button" onClick={toggleListen} disabled={loading || messages.length===0} className={`h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-xl border transition-colors ${listening ? "border-danger text-danger bg-danger/10" : "border-border hover:bg-surface-raised"} disabled:opacity-40`} aria-label="Microphone">
+              <button type="button" onClick={toggleListen} disabled={loading || evaluating || messages.length===0} className={`h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-xl border transition-colors ${listening ? "border-danger text-danger bg-danger/10" : "border-border hover:bg-surface-raised"} disabled:opacity-40`} aria-label="Microphone">
                 {listening ? <MicOff size={18} /> : <Mic size={18} />}
               </button>
-              <textarea value={input} onChange={e=>setInput(e.target.value)} placeholder={listening ? "Listening... speak your answer" : "Type or speak your answer..."} className="flex-1 min-h-[44px] max-h-32 rounded-xl border border-border bg-surface-raised/80 px-3.5 py-2.5 text-sm outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/15 resize-y" disabled={loading || messages.length===0} rows={1} />
-              <button type="submit" disabled={loading || !input.trim() || messages.length===0} className="h-11 px-4 shrink-0 rounded-xl bg-primary text-[#0B0D0C] font-medium hover:bg-primary-hover disabled:opacity-40 inline-flex items-center gap-2"><Send size={16}/> Send</button>
+              <textarea value={input} onChange={e=>setInput(e.target.value)} placeholder={listening ? "Listening... speak your answer" : "Type or speak your answer..."} className="flex-1 min-h-[44px] max-h-32 rounded-xl border border-border bg-surface-raised/80 px-3.5 py-2.5 text-sm outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/15 resize-y" disabled={loading || evaluating || messages.length===0} rows={1} />
+              <button type="submit" disabled={loading || evaluating || !input.trim() || messages.length===0} className="h-11 px-4 shrink-0 rounded-xl bg-primary text-[#0B0D0C] font-medium hover:bg-primary-hover disabled:opacity-40 inline-flex items-center gap-2"><Send size={16}/> Send</button>
             </form>
             {listening && <p className="text-xs text-accent mt-2">Listening... your answer will auto-send when you stop speaking.</p>}
             {!speechSupported.stt && <p className="text-xs text-muted mt-2">Speech recognition not supported in this browser; type your answers instead.</p>}

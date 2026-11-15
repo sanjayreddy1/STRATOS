@@ -4,8 +4,8 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadStore, saveStore } from "@/lib/local/store";
 import { ARMY_QUOTES, ARMY_IMAGES } from "@/lib/data/motivation";
-import { getDailyLesson } from "@/lib/data/daily-lessons";
-import { CheckCircle2, CalendarDays, Mic, BookOpen, Target, Clock, TrendingUp, ExternalLink, Sparkles } from "lucide-react";
+import { getCurrentLesson } from "@/lib/data/daily-lessons";
+import { CheckCircle2, CalendarDays, Mic, BookOpen, Target, Clock, TrendingUp, ExternalLink, Sparkles, Award } from "lucide-react";
 
 function daysUntil(dateStr?: string | null) {
   if (!dateStr) return null;
@@ -34,19 +34,20 @@ export default function DashboardPage() {
     setToday(dk);
     setWeekAgo(new Date(now.getTime()-6*86400000).toISOString().slice(0,10));
     setNowTick(now.getTime());
-    const l = getDailyLesson(now);
+    const l = getCurrentLesson(s);
+    const lessonKey = String(l.day);
     setLesson(l);
-    setLessonDone(!!s.lesson_progress?.[dk]);
-    setLessonDetail(s.lesson_details?.[dk] || null);
+    setLessonDone(!!s.lesson_progress?.[lessonKey]);
+    setLessonDetail(s.lesson_details?.[lessonKey] || s.lesson_details?.[dk] || null);
     setQuoteIndex(now.getDate() % ARMY_QUOTES.length);
     setImageIndex(Math.floor(now.getTime() / 5000) % ARMY_IMAGES.length);
   }, []);
 
   async function fetchDetailedLesson(force = false) {
     if (!lesson) return;
-    const dk = lesson.dateKey;
+    const lessonKey = String(lesson.day);
     const s = loadStore();
-    if (!force && s.lesson_details?.[dk]) { setLessonDetail(s.lesson_details[dk]); return; }
+    if (!force && s.lesson_details?.[lessonKey]) { setLessonDetail(s.lesson_details[lessonKey]); return; }
     setDetailLoading(true); setDetailError(null);
     try {
       const res = await fetch("/api/ai/lesson-detail", {
@@ -58,7 +59,7 @@ export default function DashboardPage() {
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to fetch detailed lesson");
       const storeNow = loadStore();
       storeNow.lesson_details = storeNow.lesson_details || {};
-      storeNow.lesson_details[dk] = data.detail;
+      storeNow.lesson_details[lessonKey] = data.detail;
       saveStore(storeNow);
       setStore(storeNow);
       setLessonDetail(data.detail);
@@ -71,12 +72,17 @@ export default function DashboardPage() {
 
   function toggleLessonDone() {
     if (!lesson) return;
+    const lessonKey = String(lesson.day);
     const s = loadStore();
     s.lesson_progress = s.lesson_progress || {};
-    s.lesson_progress[lesson.dateKey] = !s.lesson_progress[lesson.dateKey];
+    s.lesson_progress[lessonKey] = !s.lesson_progress[lessonKey];
     saveStore(s);
+    const nextLesson = getCurrentLesson(s);
     setStore(s);
-    setLessonDone(!!s.lesson_progress[lesson.dateKey]);
+    setLesson(nextLesson);
+    const nk = String(nextLesson.day);
+    setLessonDone(!!s.lesson_progress?.[nk]);
+    setLessonDetail(s.lesson_details?.[nk] || null);
   }
 
   useEffect(() => {
@@ -107,7 +113,11 @@ export default function DashboardPage() {
   const quote = ARMY_QUOTES[quoteIndex % ARMY_QUOTES.length];
   const image = ARMY_IMAGES[imageIndex % ARMY_IMAGES.length];
   const taskOfDay = computed.todaysTasks.find((t: any) => !(t.completed || t.status === "done")) || computed.todaysTasks[0] || { title: lesson.practice, suggested: true };
-  const completedLessonsCount = Object.values(store?.lesson_progress || {}).filter(Boolean).length;
+  const lessonKey = String(lesson.day);
+  const interviewResult = store?.lesson_interview_results?.[lessonKey] || null;
+  const interviewDone = !!interviewResult?.completed;
+  const moduleComplete = lessonDone && interviewDone;
+  const completedLessonsCount = (Array.isArray(store?.__unused) ? 0 : 0) || Object.keys(store?.lesson_interview_results || {}).filter(k => store.lesson_interview_results[k]?.completed && store.lesson_progress?.[k]).length;
 
   return (
     <div className="space-y-5">
@@ -165,9 +175,13 @@ export default function DashboardPage() {
                 {taskOfDay.suggested && <div className="text-xs text-muted lg:text-white/70 mt-1">Suggested from today's SSB lesson</div>}
               </div>
               <div className="border-t border-border lg:border-white/15 pt-3">
-                <div className="text-accent font-medium text-sm flex items-center gap-2"><BookOpen size={15}/> Lesson of the Day</div>
+                <div className="text-accent font-medium text-sm flex items-center gap-2"><BookOpen size={15}/> Current Lesson (Day {lesson.day})</div>
                 <div className="mt-1.5 text-sm leading-6">{lesson.topic}</div>
                 <div className="text-xs text-muted lg:text-white/70 mt-1">{lesson.focus}</div>
+                <div className="mt-2 text-xs flex flex-wrap gap-2">
+                  <span className={`px-2 py-0.5 rounded-full border ${lessonDone ? "text-success border-success/40" : "text-muted border-border lg:border-white/20"}`}>{lessonDone ? "Studied" : "Study pending"}</span>
+                  <span className={`px-2 py-0.5 rounded-full border ${interviewDone ? "text-success border-success/40" : "text-muted border-border lg:border-white/20"}`}>{interviewDone ? `Interview ${interviewResult?.score ?? ""}/100` : "Interview pending"}</span>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl border border-border lg:border-white/15 bg-surface/60 lg:bg-white/5 p-2"><div className="text-[10px] text-muted lg:text-white/70">Countdown</div><div className="font-mono text-lg text-accent">{countdown ?? "—"}</div></div>
@@ -207,12 +221,15 @@ export default function DashboardPage() {
         <Card className="overflow-hidden">
           <CardHeader>
             <div>
-              <CardTitle>Daily SSB Learning Material</CardTitle>
-              <div className="text-xs text-muted mt-1">{lesson.dateKey} • Conducted daily • {lesson.ssbLink}</div>
+              <CardTitle>Current SSB Lesson (Progressive)</CardTitle>
+              <div className="text-xs text-muted mt-1">Day {lesson.day} • {lesson.ssbLink} • Next lesson unlocks after study + interview evaluation</div>
             </div>
-            <button onClick={toggleLessonDone} className={`h-10 px-3.5 rounded-xl text-sm font-medium border inline-flex items-center gap-2 transition-colors ${lessonDone ? "bg-primary/20 text-success border-success/40" : "border-border text-text hover:bg-surface-raised"}`}>
-              <CheckCircle2 size={16}/> {lessonDone ? "Completed today" : "Mark as studied"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={toggleLessonDone} className={`h-10 px-3.5 rounded-xl text-sm font-medium border inline-flex items-center gap-2 transition-colors ${lessonDone ? "bg-primary/20 text-success border-success/40" : "border-border text-text hover:bg-surface-raised"}`}>
+                <CheckCircle2 size={16}/> {lessonDone ? "Studied" : "Mark as studied"}
+              </button>
+              <Link href={`/interviewer?lesson=${lesson.day}`} className="h-10 px-3.5 rounded-xl text-sm font-medium border border-accent/40 text-accent bg-accent/10 hover:bg-accent/15 inline-flex items-center gap-2"><Mic size={16}/> {interviewDone ? "Reattempt interview" : "Start lesson interview"}</Link>
+            </div>
           </CardHeader>
           <CardContent className="text-text space-y-4">
             <div className="rounded-xl border border-border bg-background/30 p-4">
@@ -260,6 +277,31 @@ export default function DashboardPage() {
             <div className="border border-accent/30 bg-primary/10 rounded-xl p-4 space-y-2.5">
               <div><span className="text-sm font-medium text-accent">Today's practice:</span> <span className="text-sm text-text/95">{lesson.practice}</span></div>
               <div><span className="text-sm font-medium text-accent">Reflection:</span> <span className="text-sm text-text/95">{lesson.reflection}</span></div>
+            </div>
+
+            <div className="border border-border rounded-xl p-4 bg-background/20 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-medium text-accent flex items-center gap-2"><Award size={16}/> Lesson interview evaluation</div>
+                  <div className="text-xs text-muted mt-0.5">Complete this lesson's interview and submit for strict evaluation (out of 100) to unlock the next lesson.</div>
+                </div>
+                <Link href={`/interviewer?lesson=${lesson.day}`} className="h-10 px-4 rounded-xl bg-primary text-[#0B0D0C] text-sm font-medium hover:bg-primary-hover inline-flex items-center gap-2"><Mic size={15}/> {interviewDone ? "View / reattempt" : "Take interview"}</Link>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-2 text-sm">
+                <div className="rounded-lg border border-border p-2.5"><div className="text-xs text-muted">Study</div><div className={lessonDone ? "text-success font-medium" : "text-text"}>{lessonDone ? "Completed" : "Pending"}</div></div>
+                <div className="rounded-lg border border-border p-2.5"><div className="text-xs text-muted">Interview</div><div className={interviewDone ? "text-success font-medium" : "text-text"}>{interviewDone ? "Evaluated" : "Pending"}</div></div>
+                <div className="rounded-lg border border-border p-2.5"><div className="text-xs text-muted">Score</div><div className="font-mono text-accent">{interviewDone ? `${interviewResult.score}/100` : "—"}</div></div>
+              </div>
+              {interviewDone && (
+                <div className="space-y-2 text-sm">
+                  <div><span className="text-accent font-medium">Verdict:</span> {interviewResult.verdict || "—"}</div>
+                  {interviewResult.scolding && <div className="rounded-lg border border-danger/30 bg-danger/10 p-2.5 text-danger"><span className="font-medium">Strict feedback:</span> {interviewResult.scolding}</div>}
+                  {Array.isArray(interviewResult.improvements) && interviewResult.improvements.length > 0 && (
+                    <div><div className="text-accent font-medium mb-1">Improvements</div><ul className="list-disc pl-5 space-y-1 text-text/90">{interviewResult.improvements.slice(0,4).map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>
+                  )}
+                </div>
+              )}
+              {moduleComplete && <div className="rounded-lg border border-success/30 bg-success/10 p-2.5 text-sm text-success">Lesson module completed (study + interview). The next lesson will be showcased as your current lesson.</div>}
             </div>
 
             <div className="border border-border rounded-xl p-4 space-y-3 bg-background/20">
@@ -337,8 +379,8 @@ export default function DashboardPage() {
                 <div className="border border-border rounded-xl p-3 bg-background/20"><div className="text-xs text-muted flex items-center gap-1.5"><Clock size={13}/> This week</div><div className="font-mono text-xl text-accent mt-1">{computed.hoursWeek.toFixed(1)}h</div><div className="text-[11px] text-muted">study hours</div></div>
               </div>
               <div className="border border-border rounded-xl p-3 bg-background/20">
-                <div className="text-xs text-muted mb-1">Today's lesson status</div>
-                <div className={`text-sm font-medium ${lessonDone ? "text-success" : "text-accent"}`}>{lessonDone ? "Studied and marked complete" : "Pending — study and mark as complete"}</div>
+                <div className="text-xs text-muted mb-1">Current lesson status</div>
+                <div className={`text-sm font-medium ${moduleComplete ? "text-success" : "text-accent"}`}>{moduleComplete ? "Module completed (study + interview)" : lessonDone ? (interviewDone ? "Completed" : "Studied — interview pending for next lesson unlock") : "Study pending — complete study and interview to unlock next lesson"}</div>
               </div>
               <div className="text-sm"><div className="text-accent font-medium mb-1">Focus now</div><div className="border border-border rounded-xl p-3 bg-background/20 leading-6">{taskOfDay.title}</div></div>
             </CardContent>
